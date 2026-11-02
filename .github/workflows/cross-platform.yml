@@ -1,0 +1,70 @@
+name: "Python 3.11 and 3.13, packaging"
+
+# No push trigger: release.yml calls this on every push to main.
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # The README claims a 3.11 floor, which is only true if it is exercised.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+
+      - name: Run the suite
+        run: uv run --python ${{ matrix.python }} --all-extras pytest -q
+
+  # FastAPI is an extra. A stray import of it in a core module would make every
+  # consumer on another framework install it, and nothing else in CI would
+  # notice: the dev group installs FastAPI, so the tests would still pass.
+  core-without-fastapi:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: The verifier imports without the fastapi extra
+        run: |
+          uv venv --python 3.11 /tmp/core
+          VIRTUAL_ENV=/tmp/core uv pip install .
+          VIRTUAL_ENV=/tmp/core uv run --no-project python - <<'EOF'
+          import importlib
+
+          for name in ('errors', 'verifier'):
+              importlib.import_module(f'pyapiauth.{name}')
+          import pyapiauth
+          print('core imports clean:', pyapiauth.__all__[:3], '...')
+
+          try:
+              importlib.import_module('pyapiauth.fastapi_dependencies')
+          except ImportError:
+              print('fastapi_dependencies correctly requires the fastapi extra')
+          else:
+              raise SystemExit('fastapi_dependencies imported without fastapi installed')
+          EOF
+
+  build:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      # A package that cannot be built is a package that cannot be released, and
+      # finding that out at tag time means the tag is already permanent.
+      - run: uv build
+
+      - run: uv run --no-project --with twine twine check dist/*
