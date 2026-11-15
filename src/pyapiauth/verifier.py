@@ -238,7 +238,7 @@ class Verifier:
             raise Rejected(f'issuer {claims.get("iss")!r} is not {self.issuer!r}')
         client_id = claims.get('client_id')
         kind = self.kind_of(client_id)
-        if not kind:
+        if not kind or not isinstance(client_id, str):
             known = ' or '.join(f'{prefix}*' for prefix in (self.person_prefix, self.service_prefix) if prefix)
             raise Rejected(f'client {client_id!r} is not a {known} client')
         expires = claims.get('exp')
