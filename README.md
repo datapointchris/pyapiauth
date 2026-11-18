@@ -79,9 +79,10 @@ in again, because a login cannot fix a network fault.
 
 `HeldKeys` reads the key set once and holds it. A token naming a `kid` no held
 key carries reads it again, which finds a key the provider has just rotated in.
-Those reads are at least 30 seconds apart, so a stream of forged tokens costs
-the provider one read per gap. Keys older than five minutes are read again too,
-which bounds how long a key the provider stopped publishing still verifies. A
+Those reads are at least `pyapiauth.verifier.KEY_REREAD_GAP_SECONDS` apart, so
+a stream of forged tokens costs the provider one read per gap. Keys older than
+`pyapiauth.verifier.KEY_SET_LIFESPAN_SECONDS` are read again too, which bounds
+how long a key the provider stopped publishing still verifies. A
 read that fails keeps the held keys, so an outage of the issuer is not an
 outage of the API.
 
